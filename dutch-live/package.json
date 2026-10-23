@@ -1,0 +1,12 @@
+{
+  "name": "dutch-live",
+  "private": true,
+  "description": "Live Dutch to English translation for a theater audience, in Safari on an iPhone.",
+  "scripts": {
+    "build": "node build.js",
+    "test": "node --test tests/core.test.js && node build.js && node tests/smoke.js"
+  },
+  "devDependencies": {
+    "jsdom": "24.1.3"
+  }
+}

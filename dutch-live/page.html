@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#120d0e">
+<title>Tolk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column for a phone held in a dark theater. Transcript fills
+   the screen, controls sit in a bar at the bottom, setup folds away.
+   Single dark look by choice: a lit screen bothers the row behind you. */
+:root {
+  --curtain: #120d0e;   /* page: warm near-black, like stage drapes */
+  --panel: #1d1517;
+  --rule: #3a2c2f;
+  --text: #f3ebe4;
+  --muted: #a8988f;
+  --amber: #e8a54b;     /* the one accent: stage light */
+  --alert: #ff8a7a;
+  --ok: #9fd3a8;
+  --font-text: "Atkinson Hyperlegible", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --gutter-l: max(16px, env(safe-area-inset-left, 0px));
+  --gutter-r: max(16px, env(safe-area-inset-right, 0px));
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--curtain);
+  color: var(--text);
+  font: 17px/1.45 var(--font-text);
+  -webkit-text-size-adjust: 100%;
+}
+[hidden] { display: none !important; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+.app { display: flex; flex-direction: column; height: 100%; }
+
+header {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding-top: max(10px, env(safe-area-inset-top, 0px));
+  padding-bottom: 8px;
+  padding-left: var(--gutter-l); padding-right: var(--gutter-r);
+  border-bottom: 1px solid var(--rule);
+}
+header h1 { margin: 0; font-size: 22px; letter-spacing: 0.02em; }
+header h1 span { color: var(--amber); }
+header .sub { color: var(--muted); font-size: 13px; }
+.linkbtn {
+  background: none; border: 0; color: var(--amber); font-size: 15px; padding: 6px 0; cursor: pointer;
+}
+
+/* Setup ------------------------------------------------------------- */
+.setup {
+  overflow-y: auto; flex: 1 1 auto;
+  padding-block: 14px 24px;
+  padding-left: var(--gutter-l); padding-right: var(--gutter-r);
+  display: grid; gap: 18px; align-content: start;
+}
+.setup section { display: grid; gap: 10px; max-width: 34rem; }
+.setup h2 {
+  margin: 0; font-size: 12px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.field { display: grid; gap: 4px; }
+.field label { font-size: 14px; color: var(--muted); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.row > * { min-width: 0; }
+input[type=text], input[type=password], select, textarea {
+  width: 100%; background: var(--panel); border: 1px solid var(--rule); border-radius: 8px;
+  padding: 10px 12px; font-size: 16px;
+}
+textarea { min-height: 4.5em; resize: vertical; }
+.check { display: flex; gap: 10px; align-items: center; font-size: 16px; }
+.check input { width: 20px; height: 20px; accent-color: var(--amber); }
+.btn {
+  border: 1px solid var(--rule); background: var(--panel); border-radius: 999px;
+  padding: 10px 16px; font-size: 16px; cursor: pointer;
+}
+.btn.primary { background: var(--amber); border-color: var(--amber); color: #1a1208; font-weight: 700; }
+.btn:disabled { opacity: 0.5; }
+.note { font-size: 14px; color: var(--muted); }
+.note.ok { color: var(--ok); }
+.note.bad { color: var(--alert); }
+.tips { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; font-size: 15px; color: var(--muted); }
+.tips b { color: var(--text); font-weight: 700; }
+
+/* Transcript --------------------------------------------------------- */
+.transcript {
+  flex: 1 1 auto; overflow-y: auto;
+  padding-block: 12px;
+  padding-left: var(--gutter-l); padding-right: var(--gutter-r);
+  display: flex; flex-direction: column; gap: 14px;
+}
+.empty { color: var(--muted); font-size: 15px; margin: auto 0; }
+.line { display: grid; gap: 2px; }
+.line .en { font-size: 22px; line-height: 1.35; }
+.line .nl { font-size: 14px; color: var(--muted); }
+.line.skipped .en { color: var(--muted); }
+.line.skipped .en::after { content: "  (not spoken)"; font-size: 12px; font-family: var(--font-data); }
+.line .meta { font: 12px var(--font-data); color: var(--muted); }
+body.hide-nl .line .nl { display: none; }
+.interim {
+  min-height: 1.4em; font-size: 15px; color: var(--muted); font-style: italic;
+  padding-left: var(--gutter-l); padding-right: var(--gutter-r);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Bottom bar --------------------------------------------------------- */
+.bar {
+  border-top: 1px solid var(--rule); background: var(--panel);
+  padding-top: 10px;
+  padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
+  padding-left: var(--gutter-l); padding-right: var(--gutter-r);
+  display: grid; gap: 8px;
+}
+.bar .row { justify-content: space-between; }
+.status {
+  font: 12px/1.5 var(--font-data); color: var(--muted);
+  display: flex; flex-wrap: wrap; gap: 4px 14px; font-variant-numeric: tabular-nums;
+}
+.status .on { color: var(--ok); }
+.status .bad { color: var(--alert); }
+.big { flex: 1 1 auto; padding: 14px 16px; font-size: 18px; }
+
+/* Pocket mode: pure black, so an OLED screen emits nothing. */
+.pocket {
+  position: fixed; inset: 0; background: #000; z-index: 50;
+  touch-action: manipulation; /* two quick taps exit; they must not zoom */
+  display: flex; align-items: flex-end; justify-content: center;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+}
+.pocket .hint { color: #3a3030; font-size: 13px; transition: opacity 1s; }
+.pocket .dot {
+  position: absolute; top: calc(16px + env(safe-area-inset-top, 0px)); right: calc(16px + env(safe-area-inset-right, 0px));
+  width: 6px; height: 6px; border-radius: 50%; background: #2a1a12;
+}
+.pocket .dot.blink { background: #6b3f1a; }
+@media (prefers-reduced-motion: reduce) { .pocket .hint { transition: none; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1>Tolk<span>.</span></h1>
+      <div class="sub">Dutch on stage, English in your ear</div>
+    </div>
+    <button class="linkbtn" id="toggleSetup" type="button">Setup</button>
+  </header>
+
+  <div class="setup" id="setup">
+    <section>
+      <h2>1. Your API key</h2>
+      <div class="field">
+        <label for="key">Anthropic API key (stays on this phone)</label>
+        <div class="row">
+          <input type="password" id="key" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-..." style="flex:1 1 14rem">
+          <button class="btn" id="showKey" type="button">Show</button>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn" id="testBtn" type="button">Test key and audio</button>
+      </div>
+      <div class="note" id="testNote">The test translates one Dutch sentence and speaks the English, without using the microphone.</div>
+    </section>
+
+    <section>
+      <h2>2. What you hear</h2>
+      <label class="check"><input type="checkbox" id="audioOn" checked> Speak the English aloud (into your AirPods)</label>
+      <div class="field">
+        <label for="voice">Voice</label>
+        <select id="voice"><option value="">Default English voice</option></select>
+      </div>
+      <div class="field">
+        <label for="rate">Speaking speed: <span id="rateVal">1.1</span>x</label>
+        <input type="range" id="rate" min="0.8" max="1.6" step="0.05" value="1.1">
+      </div>
+      <label class="check"><input type="checkbox" id="speakNotes" checked> Speak the short [pun notes] too</label>
+      <label class="check"><input type="checkbox" id="showNl" checked> Show the Dutch under each line</label>
+      <div class="field">
+        <label for="lang">Performer's Dutch</label>
+        <select id="lang">
+          <option value="nl-NL">Netherlands (nl-NL)</option>
+          <option value="nl-BE">Flemish (nl-BE)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="notes">Notes for the translator (optional): performer, theme, names</label>
+        <textarea id="notes" placeholder="Example: Storytelling night. Second act is a comic, Sanne, who talks about growing up in Friesland."></textarea>
+      </div>
+    </section>
+
+    <section>
+      <h2>3. Your friends' phones</h2>
+      <div class="note">Each phone runs on its own. This copies a link that opens this page with your key filled in. Anyone with the link can spend from the key until you delete it in the Anthropic Console.</div>
+      <div class="row">
+        <button class="btn" id="copyLink" type="button">Copy setup link</button>
+      </div>
+      <input type="text" id="linkOut" readonly hidden>
+      <div class="note" id="linkNote"></div>
+    </section>
+
+    <section>
+      <h2>Before the show</h2>
+      <ul class="tips">
+        <li>Open this page in <b>Safari</b>, not inside another app.</li>
+        <li>Set <b>Settings -> Display &amp; Brightness -> Auto-Lock</b> to Never for the evening. The page stops when the screen locks.</li>
+        <li>Rehearse tonight: play a Dutch stand-up clip from a laptop across the room and watch the delay figure at the bottom.</li>
+        <li>Try once with AirPods connected and once without, and compare how much of the Dutch line comes out right. With AirPods connected, the iPhone may listen through the AirPods' microphones, which are aimed at your own mouth.</li>
+        <li>In the theater, use <b>Pocket</b> to black out the screen. Tap twice quickly to come back.</li>
+      </ul>
+    </section>
+  </div>
+
+  <div class="transcript" id="transcript" hidden>
+    <div class="empty" id="empty">English lines appear here once the performer speaks.</div>
+  </div>
+  <div class="interim" id="interim" hidden></div>
+
+  <div class="bar">
+    <div class="status" id="status"><span>Not listening</span></div>
+    <div class="row">
+      <button class="btn primary big" id="startBtn" type="button">Start listening</button>
+      <button class="btn" id="pocketBtn" type="button">Pocket</button>
+    </div>
+  </div>
+</div>
+
+<div class="pocket" id="pocket" hidden>
+  <div class="dot" id="dot"></div>
+  <div class="hint" id="pocketHint">Tap twice quickly to come back</div>
+</div>
+
+<script>
+/*__CORE__*/
+</script>
+<script>
+(function () {
+  "use strict";
+  const C = window.Core;
+  const $ = (id) => document.getElementById(id);
+  const now = () => Date.now();
+
+  // ---- settings: kept in this phone's Safari storage ------------------
+  const STORE = "tolk.v1";
+  const defaults = { key: "", audioOn: true, voice: "", rate: 1.1, speakNotes: true, showNl: true, lang: "nl-NL", notes: "" };
+  let settings = Object.assign({}, defaults);
+  try { Object.assign(settings, JSON.parse(localStorage.getItem(STORE) || "{}")); } catch (e) { /* private mode: run without storage */ }
+  function save() { try { localStorage.setItem(STORE, JSON.stringify(settings)); } catch (e) { /* ignore */ } }
+
+  // A friend's setup link carries the key after #k=. Take it, store it, and
+  // wipe it from the address bar so it does not linger in screenshots.
+  const fromLink = C.keyFromHash(location.hash);
+  if (fromLink) {
+    settings.key = fromLink;
+    save();
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e) { /* ignore */ }
+  }
+
+  // ---- wire the setup form --------------------------------------------
+  const el = {
+    key: $("key"), audioOn: $("audioOn"), voice: $("voice"), rate: $("rate"), rateVal: $("rateVal"),
+    speakNotes: $("speakNotes"), showNl: $("showNl"), lang: $("lang"), notes: $("notes"),
+  };
+  el.key.value = settings.key;
+  el.audioOn.checked = settings.audioOn;
+  el.rate.value = settings.rate; el.rateVal.textContent = Number(settings.rate).toFixed(2);
+  el.speakNotes.checked = settings.speakNotes;
+  el.showNl.checked = settings.showNl;
+  el.lang.value = settings.lang;
+  el.notes.value = settings.notes;
+  document.body.classList.toggle("hide-nl", !settings.showNl);
+
+  el.key.addEventListener("input", () => { settings.key = el.key.value.trim(); save(); });
+  el.audioOn.addEventListener("change", () => { settings.audioOn = el.audioOn.checked; save(); if (!settings.audioOn) stopSpeech(); });
+  el.rate.addEventListener("input", () => { settings.rate = Number(el.rate.value); el.rateVal.textContent = settings.rate.toFixed(2); save(); });
+  el.speakNotes.addEventListener("change", () => { settings.speakNotes = el.speakNotes.checked; save(); });
+  el.showNl.addEventListener("change", () => { settings.showNl = el.showNl.checked; save(); document.body.classList.toggle("hide-nl", !settings.showNl); });
+  el.lang.addEventListener("change", () => { settings.lang = el.lang.value; save(); });
+  el.notes.addEventListener("input", () => { settings.notes = el.notes.value; save(); });
+  el.voice.addEventListener("change", () => { settings.voice = el.voice.value; save(); });
+  $("showKey").addEventListener("click", () => {
+    const show = el.key.type === "password";
+    el.key.type = show ? "text" : "password";
+    $("showKey").textContent = show ? "Hide" : "Show";
+  });
+
+  // Setup and transcript share the screen; one shows at a time.
+  function showSetup(on) {
+    $("setup").hidden = !on;
+    $("transcript").hidden = on;
+    $("interim").hidden = on;
+    $("toggleSetup").textContent = on ? "Transcript" : "Setup";
+  }
+  $("toggleSetup").addEventListener("click", () => showSetup($("setup").hidden));
+  // Open on Setup every time, so the key and audio get checked before Start.
+  showSetup(true);
+
+  // ---- voices -----------------------------------------------------------
+  let voices = [];
+  function loadVoices() {
+    if (!("speechSynthesis" in window)) return;
+    voices = speechSynthesis.getVoices().filter((v) => /^en(-|_|$)/i.test(v.lang));
+    const keep = settings.voice;
+    el.voice.innerHTML = "";
+    const def = document.createElement("option");
+    def.value = ""; def.textContent = "Default English voice";
+    el.voice.appendChild(def);
+    for (const v of voices) {
+      const o = document.createElement("option");
+      o.value = v.voiceURI; o.textContent = v.name + " (" + v.lang + ")";
+      el.voice.appendChild(o);
+    }
+    el.voice.value = voices.some((v) => v.voiceURI === keep) ? keep : "";
+  }
+  if ("speechSynthesis" in window) {
+    loadVoices();
+    speechSynthesis.addEventListener("voiceschanged", loadVoices);
+  }
+  function chosenVoice() {
+    return voices.find((v) => v.voiceURI === settings.voice)
+      || voices.find((v) => /en-US/i.test(v.lang) && v.localService)
+      || voices[0] || null;
+  }
+
+  // ---- speech out -----------------------------------------------------------
+  const speechQ = C.createSpeechQueue({ maxWaiting: 2 });
+  let speakingId = null;
+  function speak(text, onDone) {
+    if (!("speechSynthesis" in window)) return false;
+    const u = new SpeechSynthesisUtterance(text);
+    const v = chosenVoice();
+    if (v) u.voice = v;
+    u.lang = v ? v.lang : "en-US";
+    u.rate = settings.rate;
+    u.onend = u.onerror = () => { if (onDone) onDone(); };
+    speechSynthesis.speak(u);
+    return true;
+  }
+  function speakNext() {
+    if (!settings.audioOn || !("speechSynthesis" in window)) return;
+    if (speechSynthesis.speaking || speechSynthesis.pending) return;
+    const item = speechQ.shift();
+    if (!item) { speakingId = null; return; }
+    speakingId = item.id;
+    speak(item.text, () => { speakingId = null; speakNext(); });
+  }
+  function stopSpeech() {
+    speechQ.clear();
+    try { speechSynthesis.cancel(); } catch (e) { /* ignore */ }
+  }
+
+  // ---- transcript rendering ------------------------------------------------
+  const lineEls = new Map();
+  let lineCount = 0;
+  function addLine(line) {
+    const id = "L" + (++lineCount);
+    const delay = now() - line.startedAt;
+    state.delays.push(delay);
+    if (state.delays.length > 10) state.delays.shift();
+    state.history.push({ nl: line.nl, en: line.en });
+    if (state.history.length > 30) state.history.shift();
+
+    $("empty").hidden = true;
+    const box = $("transcript");
+    const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+    const div = document.createElement("div");
+    div.className = "line";
+    const en = document.createElement("div"); en.className = "en"; en.textContent = line.en;
+    const nl = document.createElement("div"); nl.className = "nl"; nl.textContent = line.nl;
+    div.append(en, nl);
+    box.appendChild(div);
+    lineEls.set(id, div);
+    // Keep the page light over a two-hour show.
+    while (box.children.length > 201) {
+      const first = box.children[1];
+      if (!first) break;
+      box.removeChild(first);
+    }
+    if (nearBottom) box.scrollTop = box.scrollHeight;
+    blinkPocket();
+
+    if (settings.audioOn) {
+      const dropped = speechQ.push({ id, text: C.forSpeech(line.en, settings.speakNotes) });
+      for (const d of dropped) { const e = lineEls.get(d.id); if (e) e.classList.add("skipped"); }
+      speakNext();
+    }
+  }
+
+  // ---- the listening and translating chain --------------------------------
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const state = {
+    running: false, rec: null, seg: null, bat: null, history: [], delays: [],
+    restarts: 0, calls: 0, waits: 0, failures: 0, pausedUntil: 0,
+    lastHeard: 0, mic: "off", error: "", keyRefused: false, needTap: false, everStarted: false,
+  };
+  let wakeLock = null;
+
+  async function requestWake() {
+    try { if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen"); }
+    catch (e) { wakeLock = null; /* Auto-Lock: Never covers this */ }
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && state.running) requestWake();
+  });
+
+  function startRecognizer() {
+    if (!state.running) return;
+    let rec;
+    try { rec = new SR(); } catch (e) { state.error = "Speech recognition could not start."; return; }
+    rec.lang = settings.lang;
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.maxAlternatives = 1;
+    rec.onstart = () => { state.mic = "on"; state.lastHeard = now(); state.everStarted = true; state.needTap = false; };
+    rec.onresult = (e) => {
+      const ts = [];
+      let allFinal = true;
+      for (let i = 0; i < e.results.length; i++) {
+        ts.push(e.results[i][0].transcript);
+        if (!e.results[i].isFinal) allFinal = false;
+      }
+      const text = C.joinResults(ts);
+      state.lastHeard = now();
+      showInterim(text);
+      for (const p of state.seg.update(text, now(), allFinal)) state.bat.add(p);
+      pump();
+    };
+    rec.onerror = (e) => {
+      const code = e.error || "unknown";
+      if (code === "no-speech" || code === "aborted") return;
+      if (code === "not-allowed" || code === "service-not-allowed") {
+        // First time: the person refused the microphone or Siri/Dictation is
+        // off. Later: Safari refused a restart that no tap started.
+        if (state.everStarted) { state.needTap = true; state.error = "Safari paused the microphone. Tap Resume."; }
+        else { state.error = "Microphone or speech recognition refused. Allow the microphone for this site, and check that Dictation is on (Settings -> General -> Keyboard)."; stop(); }
+        return;
+      }
+      if (code === "language-not-supported") { state.error = "This phone has no " + settings.lang + " speech recognition."; stop(); return; }
+      state.error = "Recognizer: " + code;
+    };
+    rec.onend = () => {
+      state.mic = "off";
+      for (const p of state.seg.reset(now())) state.bat.add(p);
+      pump();
+      if (state.rec === rec) state.rec = null;
+      // The recognizer stops on its own every so often; restart it.
+      if (state.running && !state.needTap) {
+        state.restarts += 1;
+        setTimeout(startRecognizer, 250);
+      }
+    };
+    state.rec = rec;
+    try { rec.start(); } catch (e) { state.error = "Speech recognition could not start: " + (e.message || e); }
+  }
+
+  function showInterim(text) {
+    const w = C.splitWords(text);
+    $("interim").textContent = w.length ? "... " + w.slice(-12).join(" ") : "";
+  }
+
+  function pump() {
+    if (!state.bat || !settings.key || state.keyRefused) return;
+    if (state.bat.busy() || now() < state.pausedUntil) return;
+    const b = state.bat.next(now());
+    if (b) translate(b);
+  }
+
+  async function translate(b) {
+    state.calls += 1;
+    const prompt = C.buildPrompt({ history: state.history, batchText: b.text, force: b.force, notes: settings.notes });
+    const { url, init } = C.buildApiRequest({ key: settings.key, prompt });
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 15000);
+    try {
+      const res = await fetch(url, Object.assign({}, init, { signal: ctl.signal }));
+      if (!res.ok) {
+        let msg = "";
+        try { const j = await res.json(); msg = (j && j.error && j.error.message) || ""; } catch (e) { /* ignore */ }
+        throw { status: res.status, msg, retryAfter: Number(res.headers.get("retry-after")) || 0 };
+      }
+      const reply = C.parseApiResponse(await res.json());
+      const line = state.bat.done(b, reply);
+      if (line) addLine(line);
+      else if (C.isWait(reply)) state.waits += 1;
+      state.failures = 0;
+      state.error = "";
+    } catch (err) {
+      state.failures = state.bat.failed(b, now());
+      const status = err && err.status;
+      if (status === 401 || status === 403) {
+        state.keyRefused = true;
+        state.error = "The API key was refused (" + status + "). Check it in Setup.";
+      } else if (status === 429) {
+        state.pausedUntil = now() + Math.max(err.retryAfter * 1000, C.backoffMs(state.failures));
+        state.error = "Rate limited by the API; waiting.";
+      } else {
+        state.pausedUntil = now() + C.backoffMs(state.failures);
+        state.error = status ? "API error " + status + (err.msg ? ": " + err.msg : "")
+          : (err && err.name === "AbortError" ? "API call timed out" : "No connection to the API");
+      }
+    } finally {
+      clearTimeout(timer);
+      pump();
+    }
+  }
+
+  async function start() {
+    state.error = "";
+    if (!SR) { state.error = "This browser has no speech recognition. On iPhone, open this page in Safari."; render(); return; }
+    if (!settings.key) { state.error = "Enter your API key in Setup first."; showSetup(true); render(); return; }
+    // Speaking something inside the tap unlocks audio on iPhone for the rest
+    // of the evening; it also confirms the AirPods are the output.
+    if (settings.audioOn) speak("Listening.");
+    state.running = true;
+    state.keyRefused = false;
+    state.needTap = false;
+    state.seg = state.seg || C.createSegmenter({ silenceMs: 800, maxWords: 22, keepTail: 3 });
+    state.bat = state.bat || C.createBatcher({ maxCarryWords: 40, flushAfterMs: 4000, maxBatchWords: 80 });
+    showSetup(false);
+    requestWake();
+    startRecognizer();
+    render();
+  }
+
+  function stop() {
+    state.running = false;
+    try { if (state.rec) state.rec.stop(); } catch (e) { /* ignore */ }
+    if (wakeLock) { try { wakeLock.release(); } catch (e) { /* ignore */ } wakeLock = null; }
+    render();
+  }
+
+  function resume() {
+    // A tap is what Safari wants before it lets the microphone back on.
+    state.needTap = false;
+    state.error = "";
+    startRecognizer();
+    render();
+  }
+
+  $("startBtn").addEventListener("click", () => {
+    if (state.running && state.needTap) resume();
+    else if (state.running) stop();
+    else start();
+  });
+
+  // ---- main loop: silence detection, retries, audio watchdog --------------
+  setInterval(() => {
+    const t = now();
+    if (state.running && state.seg) {
+      for (const p of state.seg.tick(t)) state.bat.add(p);
+      // A recognizer that has gone quiet for 30 s may have stalled without
+      // telling us; aborting it makes onend restart it. Harmless in a pause.
+      if (state.rec && t - state.lastHeard > 30000) {
+        state.lastHeard = t;
+        try { state.rec.abort(); } catch (e) { /* ignore */ }
+      }
+    }
+    pump();
+    // iPhone sometimes drops the end-of-speech event; poll instead of trusting it.
+    if (settings.audioOn && "speechSynthesis" in window && !speechSynthesis.speaking && !speechSynthesis.pending && speechQ.size) {
+      speakNext();
+    }
+    render();
+  }, 200);
+
+  // ---- status line -----------------------------------------------------------
+  function render() {
+    const s = [];
+    const fmt = (ms) => (ms / 1000).toFixed(1) + " s";
+    if (!state.running) s.push('<span>Not listening</span>');
+    else if (state.needTap) s.push('<span class="bad">Paused</span>');
+    else s.push('<span class="' + (state.mic === "on" ? "on" : "") + '">' + (state.mic === "on" ? "Listening" : "Restarting mic") + "</span>");
+    if (state.delays.length) {
+      s.push("<span>delay " + fmt(state.delays[state.delays.length - 1]) + " (median " + fmt(C.median(state.delays)) + ")</span>");
+    }
+    if (state.calls) s.push("<span>calls " + state.calls + "</span>");
+    if (state.waits) s.push("<span>held " + state.waits + "</span>");
+    if (state.restarts) s.push("<span>mic restarts " + state.restarts + "</span>");
+    if (state.error) s.push('<span class="bad">' + escapeHtml(state.error) + "</span>");
+    const html = s.join("");
+    const st = $("status");
+    if (st.innerHTML !== html) st.innerHTML = html;
+    const btn = $("startBtn");
+    const label = !state.running ? "Start listening" : state.needTap ? "Resume listening" : "Stop";
+    if (btn.textContent !== label) btn.textContent = label;
+    btn.classList.toggle("primary", !state.running || state.needTap);
+  }
+  function escapeHtml(x) {
+    return String(x).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  // ---- test button: key and audio, no microphone ---------------------------
+  $("testBtn").addEventListener("click", async () => {
+    const note = $("testNote");
+    if (!settings.key) { note.className = "note bad"; note.textContent = "Enter the key first."; return; }
+    // Unlock audio inside the tap, before the network wait.
+    if (settings.audioOn) speak("Testing.");
+    note.className = "note"; note.textContent = "Translating ...";
+    const nl = "Ik heb gisteren mijn fiets in de gracht gegooid.";
+    const t0 = now();
+    try {
+      const { url, init } = C.buildApiRequest({ key: settings.key, prompt: C.buildPrompt({ history: [], batchText: nl, force: true, notes: "" }) });
+      const res = await fetch(url, init);
+      if (!res.ok) {
+        let msg = "";
+        try { const j = await res.json(); msg = (j && j.error && j.error.message) || ""; } catch (e) { /* ignore */ }
+        throw new Error("HTTP " + res.status + (msg ? ": " + msg : ""));
+      }
+      const en = C.cleanReply(C.parseApiResponse(await res.json()));
+      note.className = "note ok";
+      note.textContent = "Key works. \"" + nl + "\" -> \"" + en + "\" in " + ((now() - t0) / 1000).toFixed(1) + " s.";
+      if (settings.audioOn) speak(en);
+    } catch (e) {
+      note.className = "note bad";
+      note.textContent = "Test failed: " + (e.message || e);
+    }
+  });
+
+  // ---- setup link for friends -------------------------------------------------
+  $("copyLink").addEventListener("click", async () => {
+    const note = $("linkNote");
+    if (!settings.key) { note.className = "note bad"; note.textContent = "Enter the key first."; return; }
+    const link = C.setupLink(location.href, settings.key);
+    const out = $("linkOut");
+    out.value = link;
+    try {
+      await navigator.clipboard.writeText(link);
+      out.hidden = true;
+      note.className = "note ok";
+      note.textContent = "Copied. Paste it into a message to your friends.";
+    } catch (e) {
+      out.hidden = false;
+      out.focus(); out.select();
+      note.className = "note";
+      note.textContent = "Copy the link above by hand.";
+    }
+  });
+
+  // ---- pocket mode ---------------------------------------------------------------
+  let lastTap = 0;
+  function enterPocket() {
+    $("pocket").hidden = false;
+    const hint = $("pocketHint");
+    hint.style.opacity = "1";
+    setTimeout(() => { hint.style.opacity = "0"; }, 3000);
+  }
+  $("pocketBtn").addEventListener("click", enterPocket);
+  $("pocket").addEventListener("click", () => {
+    const t = now();
+    if (t - lastTap < 450) $("pocket").hidden = true;
+    lastTap = t;
+  });
+  function blinkPocket() {
+    const d = $("dot");
+    d.classList.add("blink");
+    setTimeout(() => d.classList.remove("blink"), 300);
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
